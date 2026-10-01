@@ -89,8 +89,9 @@ class LocketViewModel : ViewModel() {
 
     fun connectionInvite(url: String, token: String, key: String, name: String = ""): String? {
         val normalizedUrl = url.trim().trimEnd('/').takeIf { it.isNotBlank() } ?: return null
-        return Uri.Builder().scheme("locket").authority("connect")
-            .appendQueryParameter("server", normalizedUrl)
+		return Uri.parse(normalizedUrl).buildUpon()
+			.appendPath("connect")
+			.appendQueryParameter("server", normalizedUrl)
             .apply {
                 token.trim().takeIf { it.isNotBlank() }?.let { appendQueryParameter("token", it) }
                 key.trim().takeIf { it.isNotBlank() }?.let { appendQueryParameter("key", it) }

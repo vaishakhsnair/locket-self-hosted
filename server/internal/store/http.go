@@ -3,8 +3,10 @@ package store
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +16,14 @@ func NewServer(repo *Repository, accessToken string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /connect", func(w http.ResponseWriter, r *http.Request) {
+		// Browsers commonly search pasted custom schemes instead of launching them.
+		// This public, no-store handoff page gives the user a real HTTPS/HTTP URL
+		// to tap, then launches the app's custom scheme from that user gesture.
+		appLink := (&url.URL{Scheme: "locket", Host: "connect", RawQuery: r.URL.RawQuery}).String()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open Locket</title><style>body{font-family:system-ui,sans-serif;max-width:30rem;margin:18vh auto;padding:24px;background:#fff8f6;color:#241a18}a{display:inline-block;padding:14px 20px;border-radius:999px;background:#b3261e;color:white;text-decoration:none;font-weight:700}</style></head><body><h1>Open Locket</h1><p>This private setup link is ready to import.</p><a href="`+html.EscapeString(appLink)+`">Open in Locket</a></body></html>`)
 	})
 	mux.HandleFunc("GET /v1/events", func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
@@ -107,7 +117,7 @@ func parseTime(value string) time.Time {
 
 func withAuth(next http.Handler, accessToken string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if accessToken != "" && r.URL.Path != "/healthz" {
+		if accessToken != "" && r.URL.Path != "/healthz" && r.URL.Path != "/connect" {
 			provided := r.Header.Get("X-Locket-Token")
 			if subtle.ConstantTimeCompare([]byte(provided), []byte(accessToken)) != 1 {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)

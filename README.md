@@ -25,7 +25,7 @@ Open `android/` in Android Studio and run the `app` configuration. For a local e
 
 The Archive tab has a manual refresh action and the app also schedules a low-frequency WorkManager sync (Android controls the exact delivery window). When a server URL is configured, the app starts a low-priority foreground delivery service connected to the server’s self-hosted SSE stream; new-photo events trigger an immediate sync without FCM/ntfy. This keeps delivery independent of third-party push, at the cost of a persistent low-priority notification and some battery use. Clear the server URL to stop it.
 
-The Widget tab can share a `locket://connect` setup link. Opening it on another installed device imports the server URL, optional access token, and shared media key, then starts delivery. Treat the link like a password because it contains the connection secrets.
+The Settings screen shares a browser-safe `/connect` setup link on the configured server. Open it in Chrome and tap **Open in Locket**; the app then imports the server URL, optional access token, shared media key, and display name, then starts delivery. Treat the link like a password because it contains the connection secrets. The app also continues to accept direct `locket://connect` links where the sender supports custom schemes.
 
 ## Exposure
 
