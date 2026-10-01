@@ -1,0 +1,16 @@
+services:
+  locket:
+    build: ../server
+    restart: unless-stopped
+    environment:
+      LOCKET_ADDR: ":8080"
+      LOCKET_DATA_DIR: "/data"
+      # Optional: require this token on every /v1 request.
+      # LOCKET_ACCESS_TOKEN: "replace-with-a-long-random-token"
+    volumes:
+      - locket-data:/data
+    ports:
+      - "8080:8080"
+
+volumes:
+  locket-data:
