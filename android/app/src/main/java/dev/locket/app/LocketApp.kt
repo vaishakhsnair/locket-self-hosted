@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -283,6 +284,7 @@ private fun CameraScreen(
         } else {
             file?.delete()
             error = "Camera capture was cancelled"
+            onClose()
         }
         pendingFile = null
     }
@@ -303,6 +305,10 @@ private fun CameraScreen(
     }
 
     LaunchedEffect(Unit) { launchSystemCamera() }
+    BackHandler {
+        captured?.first?.let(vm::discardCapture)
+        onClose()
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (captured == null) {
