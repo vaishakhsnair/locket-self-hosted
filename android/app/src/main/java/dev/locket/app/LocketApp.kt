@@ -302,6 +302,8 @@ private fun CameraScreen(
         }
     }
 
+    LaunchedEffect(Unit) { launchSystemCamera() }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (captured == null) {
             Column(Modifier.fillMaxSize().padding(horizontal = 28.dp).safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -330,7 +332,7 @@ private fun CameraScreen(
                 Text("Keep this moment?", color = Color.White, style = MaterialTheme.typography.titleLarge)
                 Text("It stays private until you send it.", color = Color.White.copy(alpha = .72f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { vm.discardCapture(file); captured = null }, modifier = Modifier.weight(1f), border = BorderStroke(1.dp, Color.White.copy(alpha = .7f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Icon(Icons.Outlined.Close, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Retake") }
+                    OutlinedButton(onClick = { vm.discardCapture(file); captured = null; launchSystemCamera() }, modifier = Modifier.weight(1f), border = BorderStroke(1.dp, Color.White.copy(alpha = .7f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Icon(Icons.Outlined.Close, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Retake") }
                     Button(onClick = { vm.confirmCapture(file, capturedAt); captured = null; onClose() }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Icon(Icons.Outlined.Check, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Send") }
                 }
             }
