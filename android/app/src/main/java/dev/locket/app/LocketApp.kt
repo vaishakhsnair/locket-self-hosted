@@ -1,18 +1,10 @@
 package dev.locket.app
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.Camera
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,7 +67,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +86,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -110,8 +102,6 @@ fun LocketApp(vm: LocketViewModel = viewModel()) {
     val photos by vm.photos.collectAsStateWithLifecycle()
     var destination by rememberSaveable { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<PhotoItem?>(null) }
-    var cameraPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
-    val requestCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { cameraPermission = it }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) { uri ->
         if (uri != null && selected != null) vm.export(context, selected!!, uri)
     }
@@ -132,8 +122,6 @@ fun LocketApp(vm: LocketViewModel = viewModel()) {
                     onRefresh = vm::refreshFromServer,
                 )
                 1 -> CameraScreen(
-                    permission = cameraPermission,
-                    requestPermission = { requestCamera.launch(Manifest.permission.CAMERA) },
                     recent = photos.firstOrNull(),
                     vm = vm,
                     onClose = { destination = 0 },
@@ -278,67 +266,60 @@ private fun EmptyMoments() {
 
 @Composable
 private fun CameraScreen(
-    permission: Boolean,
-    requestPermission: () -> Unit,
     recent: PhotoItem?,
     vm: LocketViewModel,
     onClose: () -> Unit,
 ) {
-    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
-    var camera by remember { mutableStateOf<Camera?>(null) }
-    var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
-    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
-    var zoom by remember { mutableFloatStateOf(0f) }
-    var torchEnabled by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var captured by remember { mutableStateOf<Pair<File, Long>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val lifecycleOwner = LocalLifecycleOwner.current
+    var pendingFile by remember { mutableStateOf<File?>(null) }
+    var pendingAt by remember { mutableStateOf(0L) }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = pendingFile
+        if (success && file != null && file.exists()) {
+            captured = file to pendingAt
+            error = null
+        } else {
+            file?.delete()
+            error = "Camera capture was cancelled"
+        }
+        pendingFile = null
+    }
 
-    LaunchedEffect(permission, lensFacing, provider, previewView) {
-        val currentProvider = provider ?: return@LaunchedEffect
-        val currentPreview = previewView ?: return@LaunchedEffect
+    fun launchSystemCamera() {
+        val now = System.currentTimeMillis()
+        val file = File(context.filesDir, "photos/$now.jpg").apply { parentFile?.mkdirs() }
+        pendingFile = file
+        pendingAt = now
         runCatching {
-            val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-            val preview = Preview.Builder().build().also { it.surfaceProvider = currentPreview.surfaceProvider }
-            val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-            currentProvider.unbindAll()
-            camera = currentProvider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
-            imageCapture = capture
-            zoom = 0f
-            torchEnabled = false
-        }.onFailure { error = "Camera unavailable" }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            takePicture.launch(uri)
+        }.onFailure {
+            file.delete()
+            pendingFile = null
+            error = "No camera app is available"
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (!permission) {
-            Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(42.dp))
-                Text("Camera access is needed", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
-                Button(onClick = requestPermission, modifier = Modifier.padding(top = 18.dp)) { Text("Allow camera") }
-            }
-        } else if (captured == null) {
-            AndroidView(factory = { context: Context ->
-                PreviewView(context).also { view ->
-                    previewView = view
-                    val providerFuture = ProcessCameraProvider.getInstance(context)
-                    providerFuture.addListener({ provider = providerFuture.get() }, ContextCompat.getMainExecutor(context))
+        if (captured == null) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 28.dp).safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.Start) {
+                    IconButton(onClick = onClose, modifier = Modifier.background(Color.White.copy(alpha = .12f), CircleShape)) { Icon(Icons.Outlined.Close, contentDescription = "Close camera", tint = Color.White) }
                 }
-            }, modifier = Modifier.fillMaxSize())
-            CameraTopBar(onClose = onClose, flashEnabled = torchEnabled, hasFlash = camera?.cameraInfo?.hasFlashUnit() == true, onFlash = {
-                val next = !torchEnabled
-                torchEnabled = next
-                camera?.cameraControl?.enableTorch(next)
-            }, modifier = Modifier.align(Alignment.TopCenter))
-            CameraBottomControls(
-                recent = recent,
-                zoom = zoom,
-                onZoom = { zoom = it; camera?.cameraControl?.setLinearZoom(it) },
-                onSwitch = { lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK },
-                onCapture = { imageCapture?.let { vm.capture(it, { file, at -> captured = file to at; error = null }, { error = it }) } },
-                error = error,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(64.dp))
+                Text("Use your camera", color = Color.White, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 18.dp))
+                Text("Locket will open the phone’s camera, then let you review the photo before sending.", color = Color.White.copy(alpha = .72f), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.weight(1f))
+                Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (recent != null) AsyncImage(model = recent.uri, contentDescription = "Recent moment", modifier = Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)), contentScale = ContentScale.Crop) else Box(Modifier.size(54.dp).border(1.dp, Color.White.copy(alpha = .45f), RoundedCornerShape(16.dp)))
+                    Box(Modifier.size(88.dp).border(4.dp, Color.White, CircleShape).clickable(onClick = ::launchSystemCamera).padding(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                    Spacer(Modifier.size(54.dp))
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp)) }
+            }
         } else {
             val (file, capturedAt) = captured!!
             AsyncImage(Uri.fromFile(file), contentDescription = "Photo preview", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
