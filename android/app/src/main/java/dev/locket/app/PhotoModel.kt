@@ -18,6 +18,7 @@ import androidx.work.WorkerParameters
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ExistingWorkPolicy
+import androidx.glance.appwidget.updateAll
 import java.util.concurrent.TimeUnit
 import java.io.File
 import java.text.SimpleDateFormat
@@ -125,6 +126,7 @@ class LocketViewModel : ViewModel() {
                 val merged = (incoming + current).distinctBy { it.id }.sortedByDescending { it.capturedAt }
                 _photos.value = merged
                 store?.save(merged)
+                StealthWidget().updateAll(context)
             }
         }
     }
@@ -185,7 +187,10 @@ class PhotoSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val server = ServerClient(context)
         val current = store.load()
         val incoming = server.downloadMissing(current.map { it.id }.toSet(), File(context.filesDir, "photos"))
-        if (incoming.isNotEmpty()) store.save((incoming + current).distinctBy { it.id }.sortedByDescending { it.capturedAt })
+        if (incoming.isNotEmpty()) {
+            store.save((incoming + current).distinctBy { it.id }.sortedByDescending { it.capturedAt })
+            StealthWidget().updateAll(context)
+        }
         return Result.success()
     }
 }
