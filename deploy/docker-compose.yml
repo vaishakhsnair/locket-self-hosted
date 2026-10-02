@@ -6,11 +6,11 @@ services:
       LOCKET_ADDR: ":8080"
       LOCKET_DATA_DIR: "/data"
       # Optional: require this token on every /v1 request.
-      # LOCKET_ACCESS_TOKEN: "replace-with-a-long-random-token"
+      LOCKET_ACCESS_TOKEN: "${LOCKET_ACCESS_TOKEN:-}"
     volumes:
       - locket-data:/data
     ports:
-      - "8080:8080"
+      - "${LOCKET_PORT:-8080}:8080"
 
 volumes:
   locket-data:
