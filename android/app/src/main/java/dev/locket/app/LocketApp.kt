@@ -397,6 +397,7 @@ private fun CameraBottomControls(
 private fun SettingsScreen(modifier: Modifier, photos: List<PhotoItem>, localDeviceId: String, vm: LocketViewModel) {
     val context = LocalContext.current
     val partner = partnerName(photos, localDeviceId)
+    val connectionStatus by vm.connectionStatus.collectAsStateWithLifecycle()
     var showConnection by rememberSaveable { mutableStateOf(false) }
     var url by remember { mutableStateOf(vm.serverUrl()) }
     var token by remember { mutableStateOf(vm.accessToken()) }
@@ -420,12 +421,13 @@ private fun SettingsScreen(modifier: Modifier, photos: List<PhotoItem>, localDev
             }
         }
         item { Text("Connection", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 18.dp, bottom = 3.dp)) }
-        item { SettingRow(Icons.Outlined.Link, "Server and encryption", if (url.isBlank()) "Not connected" else "Connected", onClick = { showConnection = !showConnection }) }
+        item { SettingRow(Icons.Outlined.Link, "Server and encryption", connectionStatus.label, onClick = { showConnection = !showConnection }) }
+        item { ConnectionStatusPill(connectionStatus) }
         if (showConnection) {
             item { ConnectionEditor(url, token, mediaKey, displayName, { url = it }, { token = it }, { mediaKey = it }, { displayName = it }) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { vm.saveServerUrl(url); vm.saveAccessToken(token); vm.saveMediaKey(mediaKey); vm.saveDisplayName(displayName) }, modifier = Modifier.weight(1f)) { Text("Save") }
+                    Button(onClick = { vm.saveServerUrl(url); vm.saveAccessToken(token); vm.saveMediaKey(mediaKey); vm.saveDisplayName(displayName); vm.checkConnection() }, modifier = Modifier.weight(1f)) { Text("Save") }
                     OutlinedButton(onClick = {
                         vm.connectionInvite(url, token, mediaKey, displayName)?.let { invite ->
                             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, invite) }, "Share Locket setup"))
@@ -436,6 +438,22 @@ private fun SettingsScreen(modifier: Modifier, photos: List<PhotoItem>, localDev
         }
         item { Text("About", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 18.dp, bottom = 3.dp)) }
         item { SettingRow(Icons.Outlined.Lock, "Locket", "Private photo moments") }
+    }
+}
+
+@Composable
+private fun ConnectionStatusPill(status: ServerConnectionStatus) {
+    val color = when (status) {
+        ServerConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.primary
+        ServerConnectionStatus.CHECKING -> MaterialTheme.colorScheme.tertiary
+        ServerConnectionStatus.NOT_CONFIGURED -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.error
+    }
+    Surface(color = color.copy(alpha = .12f), shape = RoundedCornerShape(50), modifier = Modifier.padding(start = 54.dp, top = 2.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("●", color = color, style = MaterialTheme.typography.labelSmall)
+            Text(status.label, color = color, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 6.dp))
+        }
     }
 }
 

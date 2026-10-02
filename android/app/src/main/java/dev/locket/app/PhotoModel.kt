@@ -51,6 +51,20 @@ class LocketViewModel : ViewModel() {
     val localDeviceId: String = context?.let { DeviceIdentity.id(it) }.orEmpty()
     private val _photos = MutableStateFlow(store?.load().orEmpty())
     val photos: StateFlow<List<PhotoItem>> = _photos.asStateFlow()
+    private val _connectionStatus = MutableStateFlow(server?.let { if (it.baseUrl.isBlank()) ServerConnectionStatus.NOT_CONFIGURED else ServerConnectionStatus.CHECKING } ?: ServerConnectionStatus.NOT_CONFIGURED)
+    val connectionStatus: StateFlow<ServerConnectionStatus> = _connectionStatus.asStateFlow()
+
+    init { checkConnection() }
+
+    fun checkConnection() {
+        val client = server ?: return
+        if (client.baseUrl.isBlank()) {
+            _connectionStatus.value = ServerConnectionStatus.NOT_CONFIGURED
+            return
+        }
+        _connectionStatus.value = ServerConnectionStatus.CHECKING
+        viewModelScope.launch(Dispatchers.IO) { _connectionStatus.value = client.checkConnection() }
+    }
 
     fun capture(capture: ImageCapture, onCaptured: (File, Long) -> Unit, onError: (String) -> Unit = {}) {
         val context = AppContextHolder.context ?: return

@@ -10,6 +10,14 @@ import java.net.URLEncoder
 import org.json.JSONArray
 import org.json.JSONObject
 
+enum class ServerConnectionStatus(val label: String) {
+    NOT_CONFIGURED("Not configured"),
+    CHECKING("Checking server…"),
+    CONNECTED("Connected"),
+    UNAUTHORIZED("Access token rejected"),
+    UNREACHABLE("Server unreachable"),
+}
+
 class ServerClient(context: Context) {
     private val preferences = context.getSharedPreferences("connection", Context.MODE_PRIVATE)
     private val localDeviceId = DeviceIdentity.id(context)
@@ -29,6 +37,26 @@ class ServerClient(context: Context) {
     var mediaKey: String
         get() = preferences.getString("media_key", "") ?: ""
         set(value) { preferences.edit().putString("media_key", value.trim()).apply() }
+
+    fun checkConnection(): ServerConnectionStatus {
+        val endpoint = baseUrl
+        if (endpoint.isBlank()) return ServerConnectionStatus.NOT_CONFIGURED
+        val connection = runCatching {
+            (URL("$endpoint/v1/photos").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5_000
+                readTimeout = 5_000
+                accessToken.takeIf { it.isNotBlank() }?.let { setRequestProperty("X-Locket-Token", it) }
+            }
+        }.getOrNull() ?: return ServerConnectionStatus.UNREACHABLE
+        return runCatching {
+            when (connection.responseCode) {
+                in 200..299 -> ServerConnectionStatus.CONNECTED
+                HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN -> ServerConnectionStatus.UNAUTHORIZED
+                else -> ServerConnectionStatus.UNREACHABLE
+            }
+        }.getOrDefault(ServerConnectionStatus.UNREACHABLE).also { connection.disconnect() }
+    }
 
     fun upload(file: File, capturedAt: Long, filename: String, photoId: String, senderDeviceId: String, senderName: String): Boolean {
         val endpoint = baseUrl
