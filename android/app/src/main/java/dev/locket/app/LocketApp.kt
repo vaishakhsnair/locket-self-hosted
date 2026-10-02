@@ -74,6 +74,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -97,6 +98,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun LocketApp(vm: LocketViewModel = viewModel()) {
@@ -283,11 +287,22 @@ private fun CameraScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var pendingFile by remember { mutableStateOf<File?>(null) }
     var pendingAt by remember { mutableStateOf(0L) }
+    val captureScope = rememberCoroutineScope()
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val file = pendingFile
         if (success && file != null && file.exists()) {
-            captured = file to pendingAt
-            error = null
+            val capturedAt = pendingAt
+            captureScope.launch {
+                val normalized = withContext(Dispatchers.IO) { vm.normalizeCapturedPhoto(file) }
+                if (normalized) {
+                    captured = file to capturedAt
+                    error = null
+                } else {
+                    file.delete()
+                    error = "Could not process the captured photo"
+                    onClose()
+                }
+            }
         } else {
             file?.delete()
             error = "Camera capture was cancelled"

@@ -1,10 +1,14 @@
 package dev.locket.app
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,6 +88,28 @@ class LocketViewModel : ViewModel() {
     }
 
     fun discardCapture(file: File) { file.delete() }
+
+    fun normalizeCapturedPhoto(file: File): Boolean = runCatching {
+        val source = BitmapFactory.decodeFile(file.path) ?: return@runCatching false
+        val exif = ExifInterface(file)
+        val matrix = Matrix().apply {
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+            }
+            postScale(-1f, 1f)
+        }
+        val normalized = Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+        file.outputStream().use { output -> normalized.compress(Bitmap.CompressFormat.JPEG, 95, output) }
+        ExifInterface(file).apply {
+            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+            saveAttributes()
+        }
+        if (normalized !== source) normalized.recycle()
+        source.recycle()
+        true
+    }.getOrDefault(false)
 
     fun serverUrl(): String = server?.baseUrl.orEmpty()
 
