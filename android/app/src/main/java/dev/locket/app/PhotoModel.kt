@@ -18,12 +18,14 @@ import androidx.work.WorkerParameters
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ExistingWorkPolicy
+import androidx.work.BackoffPolicy
 import androidx.glance.appwidget.updateAll
 import java.util.concurrent.TimeUnit
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -122,12 +124,13 @@ class LocketViewModel : ViewModel() {
         val context = AppContextHolder.context ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val current = _photos.value
-            val incoming = server?.downloadMissing(current.map { it.id }.toSet(), File(context.filesDir, "photos")).orEmpty()
+            val incoming = server?.downloadMissing(current.map { it.id }.toSet(), File(context.filesDir, "photos")) ?: return@launch
             if (incoming.isNotEmpty()) {
                 val merged = (incoming + current).distinctBy { it.id }.sortedByDescending { it.capturedAt }
                 _photos.value = merged
                 store?.save(merged)
                 StealthWidget().updateAll(context)
+                incoming.forEach { LocketNotifications.showNewMoment(context, it) }
             }
         }
     }
@@ -186,13 +189,27 @@ class PhotoSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val context = applicationContext
         val store = PhotoStore(context)
         val server = ServerClient(context)
+        if (server.baseUrl.isBlank()) return Result.success()
         val current = store.load()
-        val incoming = server.downloadMissing(current.map { it.id }.toSet(), File(context.filesDir, "photos"))
+        val incoming = server.downloadMissing(current.map { it.id }.toSet(), File(context.filesDir, "photos")) ?: return Result.retry()
+        var uploadFailed = false
+        val localId = DeviceIdentity.id(context)
+        val withUploads = current.map { photo ->
+            if (photo.senderDeviceId == localId && photo.status in setOf(PhotoStatus.PENDING, PhotoStatus.UPLOADING)) {
+                if (server.upload(File(photo.uri.path.orEmpty()), photo.capturedAt, photo.filename, photo.id, localId, photo.senderName)) {
+                    photo.copy(status = PhotoStatus.SENT)
+                } else {
+                    uploadFailed = true
+                    photo.copy(status = PhotoStatus.PENDING)
+                }
+            } else photo
+        }
         if (incoming.isNotEmpty()) {
-            store.save((incoming + current).distinctBy { it.id }.sortedByDescending { it.capturedAt })
+            incoming.forEach { LocketNotifications.showNewMoment(context, it) }
             StealthWidget().updateAll(context)
         }
-        return Result.success()
+        store.save((incoming + withUploads).distinctBy { it.id }.sortedByDescending { it.capturedAt })
+        return if (uploadFailed) Result.retry() else Result.success()
     }
 }
 
@@ -203,7 +220,9 @@ object PhotoSyncScheduler {
     }
 
     fun runNow(context: Context) {
-        val request = OneTimeWorkRequestBuilder<PhotoSyncWorker>().build()
+        val request = OneTimeWorkRequestBuilder<PhotoSyncWorker>()
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
         WorkManager.getInstance(context).enqueueUniqueWork("photo-sync-now", ExistingWorkPolicy.REPLACE, request)
     }
 }

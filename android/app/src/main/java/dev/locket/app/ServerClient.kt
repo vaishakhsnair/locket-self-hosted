@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import java.io.File
 import java.net.HttpURLConnection
+import java.io.IOException
 import java.net.URL
 import java.net.URLEncoder
 import org.json.JSONArray
@@ -52,7 +53,7 @@ class ServerClient(context: Context) {
         }.getOrDefault(false).also { connection.disconnect() }
     }
 
-    fun downloadMissing(knownIds: Set<String>, destination: File): List<PhotoItem> {
+    fun downloadMissing(knownIds: Set<String>, destination: File): List<PhotoItem>? {
         val endpoint = baseUrl
         if (endpoint.isBlank()) return emptyList()
         return runCatching {
@@ -71,7 +72,7 @@ class ServerClient(context: Context) {
                         listConnection.inputStream.bufferedReader().use { it.readText() }
                     }.getOrNull()
                     listConnection.disconnect()
-                    if (response == null) break
+                    if (response == null) throw IOException("photo list request failed")
                     val page = JSONObject(response)
                     val entries = page.optJSONArray("photos") ?: JSONArray()
                     for (index in 0 until entries.length()) {
@@ -86,7 +87,7 @@ class ServerClient(context: Context) {
                     cursor = page.optString("nextCursor").takeIf { it.isNotBlank() }
                 } while (cursor != null)
             }
-        }.getOrDefault(emptyList())
+        }.getOrNull()
     }
 
     fun openEventStream(): HttpURLConnection? {

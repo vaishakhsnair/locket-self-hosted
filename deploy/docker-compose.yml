@@ -8,9 +8,6 @@ services:
       # Optional: require this token on every /v1 request.
       LOCKET_ACCESS_TOKEN: "${LOCKET_ACCESS_TOKEN:-}"
     volumes:
-      - locket-data:/data
+      - ../server/data:/data
     ports:
       - "${LOCKET_PORT:-8080}:8080"
-
-volumes:
-  locket-data:
