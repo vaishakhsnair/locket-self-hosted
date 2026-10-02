@@ -415,7 +415,7 @@ private fun SettingsScreen(modifier: Modifier, photos: List<PhotoItem>, localDev
             Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = RoundedCornerShape(20.dp)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Widgets, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column(Modifier.weight(1f).padding(start = 14.dp)) { Text("Stealth widget", style = MaterialTheme.typography.titleMedium); Text("Clock cover with received-moment reveal", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 3.dp)) }
+                    Column(Modifier.weight(1f).padding(start = 14.dp)) { Text("Stealth widget", style = MaterialTheme.typography.titleMedium); Text("Clock cover when enabled; photo by default when disabled", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 3.dp)) }
                     Switch(checked = revealEnabled, onCheckedChange = { revealEnabled = it; vm.setDoubleTapRevealEnabled(it) })
                 }
             }

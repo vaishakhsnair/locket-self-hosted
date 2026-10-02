@@ -72,7 +72,8 @@ class StealthWidget : GlanceAppWidget() {
             val state = currentState<Preferences>()
             val revealUntil = state[longPreferencesKey(REVEAL_UNTIL)] ?: 0L
             val latest = latestReceivedPhoto(context)
-            val image = if (revealUntil > System.currentTimeMillis()) latestPhotoBitmap(context, latest) else null
+            val stealthEnabled = context.getSharedPreferences("widget_settings", Context.MODE_PRIVATE).getBoolean("double_tap_reveal", true)
+            val image = if (!stealthEnabled || revealUntil > System.currentTimeMillis()) latestPhotoBitmap(context, latest) else null
             if (image != null && latest != null) {
                 Box(GlanceModifier.fillMaxSize().clickable(actionRunCallback<RevealCallback>())) {
                     Image(provider = BitmapImageProvider(image), contentDescription = "Latest received moment", modifier = GlanceModifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -92,7 +93,7 @@ class StealthWidget : GlanceAppWidget() {
                         Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), style = TextStyle(color = ColorProvider(primaryText), fontSize = 32.sp))
                         Text(SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date()), style = TextStyle(color = ColorProvider(mutedText), fontSize = 13.sp), modifier = GlanceModifier.padding(top = 3.dp))
                     }
-                    if (latest != null && latest.optLong("capturedAt") > context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_SEEN_RECEIVED, 0L)) {
+                    if (stealthEnabled && latest != null && latest.optLong("capturedAt") > context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_SEEN_RECEIVED, 0L)) {
                         Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
                             Text("•", modifier = GlanceModifier.padding(10.dp), style = TextStyle(color = ColorProvider(indicator), fontSize = 20.sp))
                         }

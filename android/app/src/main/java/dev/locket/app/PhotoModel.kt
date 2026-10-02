@@ -97,7 +97,11 @@ class LocketViewModel : ViewModel() {
 
     fun doubleTapRevealEnabled(): Boolean = context?.getSharedPreferences("widget_settings", Context.MODE_PRIVATE)?.getBoolean("double_tap_reveal", true) ?: true
 
-    fun setDoubleTapRevealEnabled(enabled: Boolean) { context?.getSharedPreferences("widget_settings", Context.MODE_PRIVATE)?.edit()?.putBoolean("double_tap_reveal", enabled)?.apply() }
+    fun setDoubleTapRevealEnabled(enabled: Boolean) {
+        val appContext = context ?: return
+        appContext.getSharedPreferences("widget_settings", Context.MODE_PRIVATE).edit().putBoolean("double_tap_reveal", enabled).apply()
+        if (enabled) resetStealth(appContext) else kotlinx.coroutines.MainScope().launch { StealthWidget().updateAll(appContext) }
+    }
 
     fun connectionInvite(): String? {
         return connectionInvite(server?.baseUrl.orEmpty(), server?.accessToken.orEmpty(), server?.mediaKey.orEmpty(), server?.displayName.orEmpty())
